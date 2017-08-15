@@ -113,7 +113,13 @@ typedef struct {
     std::string username;
     std::string password;
   } basicAuth;
+
+  std::string certPath;
+  std::string certType;
+  std::string keyPath;
+  std::string keyPassword;
   std::string customUserAgent;
+  std::string uriProxy;
   struct {
     // total time of the last request in seconds Total time of previous
     // transfer. See CURLINFO_TOTAL_TIME
@@ -166,6 +172,40 @@ In order to provide an easy to use API, the simple usage via the static
 methods implicitly calls the curl global functions and is therefore also **not
 thread-safe**.
 
+## HTTPS User Certificate
+
+Simple wrapper functions are provided to allow clients to authenticate using certificates.
+Under the hood these wrappers set cURL options, e.g. `CURLOPT_SSLCERT`, using `curl_easy_setopt`.
+Note: currently `libcurl` compiled with `gnutls` (e.g. `libcurl4-gnutls-dev` on
+ubuntu) is buggy in that it returns a wrong error code when these options are set to invalid values.
+
+```cpp
+// set CURLOPT_SSLCERT
+conn->SetCertPath(certPath);
+// set CURLOPT_SSLCERTTYPE
+conn->SetCertType(type);
+// set CURLOPT_SSLKEY
+conn->SetKeyPath(keyPath);
+// set CURLOPT_KEYPASSWD
+conn->SetKeyPassword(keyPassword);
+```
+
+## HTTP Proxy Tunneling Support
+
+An HTTP Proxy can be set to use for the upcoming request.
+To specify a port number, append :[port] to the end of the host name. If not specified, `libcurl` will default to using port 1080 for proxies. The proxy string may be prefixed with `http://` or `https://`. If no HTTP(S) scheme is specified, the address provided to `libcurl` will be prefixed with `http://` to specify an HTTP proxy. A proxy host string can embedded user + password.
+The operation will be tunneled through the proxy as curl option `CURLOPT_HTTPPROXYTUNNEL` is enabled by default.
+A numerical IPv6 address must be written within [brackets].
+
+```cpp
+// set CURLOPT_PROXY
+conn->SetProxy("https://37.187.100.23:3128");
+/* or you can set it without the protocol scheme and
+http:// will be prefixed by default */
+conn->SetProxy("37.187.100.23:3128");
+/* the following request will be tunneled through the proxy */
+RestClient::Response res = conn->get("/get");
+```
 
 ## Dependencies
 - [libcurl][]

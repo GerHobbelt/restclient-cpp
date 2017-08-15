@@ -63,6 +63,13 @@ RestClient::Connection::GetInfo() {
   ret.customUserAgent = this->customUserAgent;
   ret.lastRequest = this->lastRequest;
 
+  ret.certPath = this->certPath;
+  ret.certType = this->certType;
+  ret.keyPath = this->keyPath;
+  ret.keyPassword = this->keyPassword;
+
+  ret.uriProxy = this->uriProxy;
+
   return ret;
 }
 
@@ -191,6 +198,70 @@ RestClient::Connection::SetBasicAuth(const std::string& username,
 }
 
 /**
+ * @brief set certificate path
+ *
+ * @param path to certificate file
+ *
+ */
+void
+RestClient::Connection::SetCertPath(const std::string& cert) {
+  this->certPath = cert;
+}
+
+/**
+ * @brief set certificate type
+ *
+ * @param certificate type (e.g. "PEM" or "DER")
+ *
+ */
+void
+RestClient::Connection::SetCertType(const std::string& certType) {
+  this->certType = certType;
+}
+
+/**
+ * @brief set key path
+ *
+ * @param path to key file
+ *
+ */
+void
+RestClient::Connection::SetKeyPath(const std::string& keyPath) {
+  this->keyPath = keyPath;
+}
+
+/**
+ * @brief set key password
+ *
+ * @param key password
+ *
+ */
+void
+RestClient::Connection::SetKeyPassword(const std::string& keyPassword) {
+  this->keyPassword = keyPassword;
+}
+
+/**
+ * @brief set HTTP proxy address and port
+ *
+ * @param proxy address with port number
+ *
+ */
+void
+RestClient::Connection::SetProxy(const std::string& uriProxy) {
+  std::string uriProxyUpper = uriProxy;
+  // check if the provided address is prefixed with "http"
+  std::transform(uriProxyUpper.begin(), uriProxyUpper.end(),
+    uriProxyUpper.begin(), ::toupper);
+
+  if ((uriProxy.length() > 0) && (uriProxyUpper.compare(0, 4, "HTTP") != 0)) {
+    this->uriProxy = "http://" + uriProxy;
+  } else {
+    this->uriProxy = uriProxy;
+  }
+}
+
+/**
  * @brief helper function to get called from the actual request methods to
  * prepare the curlHandle for transfer with generic options, perform the
  * request and record some stats from the last request and then reset the
@@ -268,14 +339,51 @@ RestClient::Connection::performCurlRequest(const std::string& uri) {
     curl_easy_setopt(this->curlHandle, CURLOPT_CAINFO,
                      this->caInfoFilePath.c_str());
   }
+
+  // set cert file path
+  if (!this->certPath.empty()) {
+    curl_easy_setopt(this->curlHandle, CURLOPT_SSLCERT,
+                     this->certPath.c_str());
+  }
+
+  // set cert type
+  if (!this->certType.empty()) {
+    curl_easy_setopt(this->curlHandle, CURLOPT_SSLCERTTYPE,
+                     this->certType.c_str());
+  }
+  // set key file path
+  if (!this->keyPath.empty()) {
+    curl_easy_setopt(this->curlHandle, CURLOPT_SSLKEY,
+                     this->keyPath.c_str());
+  }
+  // set key password
+  if (!this->keyPassword.empty()) {
+    curl_easy_setopt(this->curlHandle, CURLOPT_KEYPASSWD,
+                     this->keyPassword.c_str());
+  }
+
+  // set web proxy address
+  if (!this->uriProxy.empty()) {
+    curl_easy_setopt(this->curlHandle, CURLOPT_PROXY,
+                     uriProxy.c_str());
+    curl_easy_setopt(this->curlHandle, CURLOPT_HTTPPROXYTUNNEL,
+                     1L);
+  }
+
   res = curl_easy_perform(this->curlHandle);
   if (res != CURLE_OK) {
-    if (res == CURLE_OPERATION_TIMEDOUT) {
-      ret.code = res;
-      ret.body = "Operation Timeout.";
-    } else {
-      ret.body = "Failed to query.";
-      ret.code = -1;
+    switch (res) {
+      case CURLE_OPERATION_TIMEDOUT:
+        ret.code = res;
+        ret.body = "Operation Timeout.";
+        break;
+      case CURLE_SSL_CERTPROBLEM:
+        ret.code = res;
+        ret.body = curl_easy_strerror(res);
+        break;
+      default:
+        ret.body = "Failed to query.";
+        ret.code = -1;
     }
   } else {
     int64_t http_code = 0;

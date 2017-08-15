@@ -22,6 +22,7 @@ class ConnectionTest : public ::testing::Test
     virtual void SetUp()
     {
       conn = new RestClient::Connection("https://httpbin.org");
+      conn->SetTimeout(10);
     }
 
     virtual void TearDown()
@@ -90,6 +91,17 @@ TEST_F(ConnectionTest, TestBasicAuth)
   EXPECT_EQ("foo", root.get("user", "no user").asString());
   EXPECT_EQ(true, root.get("authenticated", false).asBool());
 
+}
+
+TEST_F(ConnectionTest, TestSSLCert)
+{
+  conn->SetCertPath("non-existent file");
+  conn->SetKeyPath("non-existent key path");
+  conn->SetKeyPassword("imaginary_password");
+  conn->SetCertType("invalid cert type");
+  RestClient::Response res = conn->get("/get");
+
+  EXPECT_EQ(58, res.code);
 }
 
 TEST_F(ConnectionTest, TestSetHeaders)
@@ -203,4 +215,34 @@ TEST_F(ConnectionTest, TestNoSignal)
   conn->SetNoSignal(true);
   RestClient::Response res = conn->get("/get");
   EXPECT_EQ(200, res.code);
+}
+
+TEST_F(ConnectionTest, TestProxy)
+{
+  conn->SetProxy("127.0.0.1:3128");
+  RestClient::Response res = conn->get("/get");
+  EXPECT_EQ(200, res.code);
+}
+
+TEST_F(ConnectionTest, TestUnSetProxy)
+{
+  conn->SetProxy("127.0.0.1:3128");
+  conn->SetProxy("");
+  RestClient::Response res = conn->get("/get");
+  EXPECT_EQ(200, res.code);
+}
+
+TEST_F(ConnectionTest, TestProxyAddressPrefixed)
+{
+  conn->SetProxy("http://127.0.0.1:3128");
+  RestClient::Response res = conn->get("/get");
+  EXPECT_EQ(200, res.code);
+}
+
+TEST_F(ConnectionTest, TestInvalidProxy)
+{
+  conn->SetProxy("127.0.0.1:666");
+  RestClient::Response res = conn->get("/get");
+  EXPECT_EQ("Failed to query.", res.body);
+  EXPECT_EQ(-1, res.code);
 }
