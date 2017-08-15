@@ -1,4 +1,6 @@
 # Changelog
+## v0.4.5 (2nd Dec 2016)
+- no-signal capability
 
 ## v0.4.4 (13th May 2016)
 - bump version because v0.4.3 was mistagged
