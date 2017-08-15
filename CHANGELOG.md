@@ -1,4 +1,7 @@
 # Changelog
+## v0.4.6 (15th Aug 2017)
+- proxy tunnelling support and cleanups
+
 ## v0.4.5 (2nd Dec 2016)
 - no-signal capability
 
