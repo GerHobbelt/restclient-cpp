@@ -340,6 +340,9 @@ RestClient::Connection::performCurlRequest(const std::string& uri) {
     curl_easy_setopt(this->curlHandle, CURLOPT_NOSIGNAL, 1);
   }
 
+  curl_easy_setopt(this->curlHandle, CURLOPT_SSL_VERIFYPEER, 0L);
+  curl_easy_setopt(this->curlHandle, CURLOPT_SSL_VERIFYHOST, 0L);
+
   // if provided, supply CA path
   if (!this->caInfoFilePath.empty()) {
     curl_easy_setopt(this->curlHandle, CURLOPT_CAINFO,
