@@ -190,6 +190,12 @@ class Connection {
     // set CURLOPT_SSLCERTTYPE
     void SetCertType(const std::string& type);
 
+    // set CURLOPT_SSL_VERIFYHOST
+    void SetCertVerifyHost(bool verify_host);
+
+    // set CURLOPT_SSL_VERIFYPEER
+    void SetCertVerifyPeer(bool verify_peer);
+
     // set CURLOPT_SSLKEY. Default format is PEM
     void SetKeyPath(const std::string& keyPath);
 
@@ -256,6 +262,8 @@ class Connection {
     RequestInfo lastRequest;
     std::string certPath;
     std::string certType;
+    bool certVerifyHost = true;
+    bool certVerifyPeer = true;
     std::string keyPath;
     std::string keyPassword;
     std::string uriProxy;

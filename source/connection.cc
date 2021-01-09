@@ -269,6 +269,26 @@ RestClient::Connection::SetCertType(const std::string& certType) {
 }
 
 /**
+ * @brief set verify host
+ *
+ * @param boolean
+*/
+void
+RestClient::Connection::SetCertVerifyHost(bool verify_host) {
+  this->certVerifyHost = verify_host;
+}
+
+/**
+ * @brief set verify peer
+ *
+ * @param boolean
+*/
+void
+RestClient::Connection::SetCertVerifyPeer(bool verify_peer) {
+  this->certVerifyPeer = verify_peer;
+}
+
+/**
  * @brief set key path
  *
  * @param path to key file
@@ -366,7 +386,7 @@ RestClient::Connection::performCurlRequest(const std::string& uri) {
  *
  * @param uri URI to query
  * @param ret Reference to the response struct that should be filled
- * 
+ *
  * @return reference to response struct for chaining
  */
 RestClient::Response*
@@ -419,6 +439,14 @@ RestClient::Connection::performCurlRequest(const std::string& uri,
   /** set user agent */
   curl_easy_setopt(getCurlHandle(), CURLOPT_USERAGENT,
                    this->GetUserAgent().c_str());
+
+   /** set verify host */
+  curl_easy_setopt(this->curlHandle, CURLOPT_SSL_VERIFYHOST,
+                   this->certVerifyHost);
+
+  /** set verify peer */
+  curl_easy_setopt(this->curlHandle, CURLOPT_SSL_VERIFYPEER,
+                   this->certVerifyPeer);
 
   // set timeout
   if (this->timeout) {
@@ -553,7 +581,7 @@ RestClient::Connection::get(const std::string& url) {
  *
  * @param url to query
  * @param response struct
- * 
+ *
  * @return response struct ref for chaining
  */
 RestClient::Response*
