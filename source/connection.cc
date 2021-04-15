@@ -388,7 +388,7 @@ RestClient::Connection::performCurlRequest(const std::string& uri) {
         ret.body = curl_easy_strerror(res);
         break;
       default:
-        ret.body = "Failed to query.";
+        ret.body =  std::string("failed to quey: ") + curl_easy_strerror(res);
         ret.code = -1;
     }
   } else {
@@ -420,6 +420,178 @@ RestClient::Connection::performCurlRequest(const std::string& uri) {
   return ret;
 }
 
+
+/**
+ * @brief helper function to get called from the actual request methods to
+ * prepare the curlHandle for transfer with generic options, perform the
+ * request and record some stats from the last request and then reset the
+ * handle with curl_easy_reset to its default state. This will keep things
+ * like connections and session ID intact but makes sure you can change
+ * parameters on the object for another request.
+ *
+ * @param uri URI to query
+ * @param ret Reference to the Response struct that should be filled
+ *
+ * @return 0 on success and 1 on error
+ */
+RestClient::ResponseBinary
+RestClient::Connection::performCurlRequestToFile(const std::string &uri)
+{
+	// init return type
+	RestClient::ResponseBinary retb;
+	RestClient::Response ret;
+
+	std::string url = std::string(this->baseUrl + uri);
+	std::string headerString;
+	CURLcode res = CURLE_OK;
+	curl_slist *headerList = NULL;
+
+	/** set query URL */
+	curl_easy_setopt(this->curlHandle, CURLOPT_URL, url.c_str());
+	/** set callback function */
+	curl_easy_setopt(this->curlHandle, CURLOPT_WRITEFUNCTION,
+	       Helpers::write_to_file_callback);
+	/** set data object to pass to callback function */
+	curl_easy_setopt(this->curlHandle, CURLOPT_WRITEDATA, &retb);
+	/** set the header callback function */
+	curl_easy_setopt(this->curlHandle, CURLOPT_HEADERFUNCTION,
+	       Helpers::header_callback);
+	/** callback object for headers */
+	curl_easy_setopt(this->curlHandle, CURLOPT_HEADERDATA, &ret);
+	/** set http headers */
+	for (HeaderFields::const_iterator it = this->headerFields.begin();
+	       it != this->headerFields.end(); ++it) {
+		headerString = it->first;
+		headerString += ": ";
+		headerString += it->second;
+		headerList = curl_slist_append(headerList, headerString.c_str());
+	}
+	curl_easy_setopt(this->curlHandle, CURLOPT_HTTPHEADER,
+	       headerList);
+
+	// set basic auth if configured
+	if (this->basicAuth.username.length() > 0) {
+		std::string authString = std::string(this->basicAuth.username + ":" +
+		       this->basicAuth.password);
+		curl_easy_setopt(this->curlHandle, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+		curl_easy_setopt(this->curlHandle, CURLOPT_USERPWD, authString.c_str());
+	}
+	/** set user agent */
+	curl_easy_setopt(this->curlHandle, CURLOPT_USERAGENT,
+	       this->GetUserAgent().c_str());
+
+	// set timeout
+	if (this->timeout) {
+		curl_easy_setopt(this->curlHandle, CURLOPT_TIMEOUT, this->timeout);
+		// dont want to get a sig alarm on timeout
+		curl_easy_setopt(this->curlHandle, CURLOPT_NOSIGNAL, 1);
+	}
+	// set follow redirect
+	if (this->followRedirects == true) {
+		curl_easy_setopt(this->curlHandle, CURLOPT_FOLLOWLOCATION, 1L);
+		curl_easy_setopt(this->curlHandle, CURLOPT_MAXREDIRS,
+		       static_cast<int64_t>(this->maxRedirects));
+	}
+
+	if (this->noSignal) {
+		// multi-threaded and prevent entering foreign signal handler (e.g. JNI)
+		curl_easy_setopt(this->curlHandle, CURLOPT_NOSIGNAL, 1);
+	}
+
+	// if provided, supply CA path
+	if (!this->caInfoFilePath.empty()) {
+		curl_easy_setopt(this->curlHandle, CURLOPT_CAINFO,
+		       this->caInfoFilePath.c_str());
+	}
+
+	// set cert file path
+	if (!this->certPath.empty()) {
+		curl_easy_setopt(this->curlHandle, CURLOPT_SSLCERT,
+		       this->certPath.c_str());
+	}
+
+	// set cert type
+	if (!this->certType.empty()) {
+		curl_easy_setopt(this->curlHandle, CURLOPT_SSLCERTTYPE,
+		       this->certType.c_str());
+	}
+	// set key file path
+	if (!this->keyPath.empty()) {
+		curl_easy_setopt(this->curlHandle, CURLOPT_SSLKEY,
+		       this->keyPath.c_str());
+	}
+	// set key password
+	if (!this->keyPassword.empty()) {
+		curl_easy_setopt(this->curlHandle, CURLOPT_KEYPASSWD,
+		       this->keyPassword.c_str());
+	}
+
+	// set web proxy address
+	if (!this->uriProxy.empty()) {
+		curl_easy_setopt(this->curlHandle, CURLOPT_PROXY,
+		       uriProxy.c_str());
+		curl_easy_setopt(this->curlHandle, CURLOPT_HTTPPROXYTUNNEL,
+		       1L);
+	}
+
+	res = curl_easy_perform(this->curlHandle);
+	if (res != CURLE_OK) {
+		switch (res) {
+		case CURLE_OPERATION_TIMEDOUT:
+		{
+			retb.code = res;
+			std::string r = "Operation Timeout";
+			std::copy(r.begin(), r.end(), std::back_inserter(retb.binbody));
+		}
+		break;
+		case CURLE_SSL_CERTPROBLEM:
+		{
+			retb.code = res;
+			std::string r =  curl_easy_strerror(res);
+			std::copy(r.begin(), r.end(), std::back_inserter(retb.binbody));
+		}
+		break;
+		default:
+			std::string r = "Failed to query. ";
+			std::copy(r.begin(), r.end(), std::back_inserter(retb.binbody));
+			retb.code = -1;
+		}
+	} else {
+		int64_t http_code = 0;
+		curl_easy_getinfo(this->curlHandle, CURLINFO_RESPONSE_CODE, &http_code);
+		retb.code = static_cast<int>(http_code);
+	}
+	printf("curl_easy_perform: %d\n", res);
+
+	curl_easy_getinfo(this->curlHandle, CURLINFO_TOTAL_TIME,
+	       &this->lastRequest.totalTime);
+	curl_easy_getinfo(this->curlHandle, CURLINFO_NAMELOOKUP_TIME,
+	       &this->lastRequest.nameLookupTime);
+	curl_easy_getinfo(this->curlHandle, CURLINFO_CONNECT_TIME,
+	       &this->lastRequest.connectTime);
+	curl_easy_getinfo(this->curlHandle, CURLINFO_APPCONNECT_TIME,
+	       &this->lastRequest.appConnectTime);
+	curl_easy_getinfo(this->curlHandle, CURLINFO_PRETRANSFER_TIME,
+	       &this->lastRequest.preTransferTime);
+	curl_easy_getinfo(this->curlHandle, CURLINFO_STARTTRANSFER_TIME,
+	       &this->lastRequest.startTransferTime);
+	curl_easy_getinfo(this->curlHandle, CURLINFO_REDIRECT_TIME,
+	       &this->lastRequest.redirectTime);
+	curl_easy_getinfo(this->curlHandle, CURLINFO_REDIRECT_COUNT,
+	       &this->lastRequest.redirectCount);
+	// free header list
+	curl_slist_free_all(headerList);
+	// reset curl handle
+	curl_easy_reset(this->curlHandle);
+
+	retb.code = ret.code;
+	retb.headers = ret.headers;
+
+	return retb;
+}
+
+
+
 /**
  * @brief HTTP GET method
  *
@@ -431,6 +603,13 @@ RestClient::Response
 RestClient::Connection::get(const std::string& url) {
   return this->performCurlRequest(url);
 }
+
+RestClient::ResponseBinary
+RestClient::Connection::getToFile(const std::string& url) {
+  return this->performCurlRequestToFile(url);
+}
+
+
 /**
  * @brief HTTP POST method
  *

@@ -29,6 +29,49 @@ size_t RestClient::Helpers::write_callback(void *data, size_t size,
   return (size * nmemb);
 }
 
+
+#include <iostream>
+#include <fstream>
+/**
+ * @brief write callback function for libcurl
+ *
+ * @param data returned data of size (size*nmemb)
+ * @param size size parameter
+ * @param nmemb memblock parameter
+ * @param userdata pointer to user data to save/work with return data
+ *
+ * @return (size * nmemb)
+ */
+size_t RestClient::Helpers::write_to_file_callback(void *data, size_t size,
+       size_t nmemb, void *userdata)
+{
+#if 1
+	RestClient::ResponseBinary *r;
+	r = reinterpret_cast<RestClient::ResponseBinary*>(userdata);
+
+	size_t newsize = r->size + size * nmemb;
+	std::vector<char> vec((char*) data, ((char*) data) + (size * nmemb));
+	r->binbody.insert(r->binbody.end(), vec.begin(), vec.end());
+	r->size = newsize;
+printf("newsize: %lu\n", r->size);
+	return (size * nmemb); //???
+
+#else
+	FILE *outfile = fopen("/tmp/dump.bin", "a");
+	if (outfile) {
+
+		size_t i = size;
+		fwrite(data, size, nmemb, outfile);
+		fclose(outfile);
+
+		return (nmemb * size);
+	} else {
+		return 0;
+	}
+	return 0;
+#endif
+}
+
 /**
  * @brief header callback for libcurl
  *

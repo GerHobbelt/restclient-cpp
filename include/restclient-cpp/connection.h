@@ -182,6 +182,7 @@ class Connection {
 
     // Basic HTTP verb methods
     RestClient::Response get(const std::string& uri);
+    RestClient::ResponseBinary getToFile(const std::string& url);
     RestClient::Response post(const std::string& uri,
                               const std::string& data);
     RestClient::Response put(const std::string& uri,
@@ -213,6 +214,7 @@ class Connection {
     std::string keyPassword;
     std::string uriProxy;
     RestClient::Response performCurlRequest(const std::string& uri);
+    RestClient::ResponseBinary performCurlRequestToFile(const std::string &uri);
 };
 };  // namespace RestClient
 

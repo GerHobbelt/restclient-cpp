@@ -43,6 +43,10 @@ namespace Helpers {
   size_t write_callback(void *ptr, size_t size, size_t nmemb,
                               void *userdata);
 
+
+  size_t write_to_file_callback(void *data, size_t size,
+                                             size_t nmemb, void *userdata);
+
   // header callback function
   size_t header_callback(void *ptr, size_t size, size_t nmemb,
                                 void *userdata);
